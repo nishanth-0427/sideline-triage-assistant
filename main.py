@@ -1,13 +1,17 @@
+import os
 import anyio
+from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import types
 
+# Load environment variables from .env
+load_dotenv()
+
 app = FastAPI(title="Sideline Triage Assistant API")
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,10 +19,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# The new SDK automatically picks up the GEMINI_API_KEY environment variable!
-client = genai.Client()
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("GEMINI_API_KEY is missing. Check your .env file.")
 
-MODEL_NAME = "gemini-3.5-flash"
+# Initialize the modern client
+client = genai.Client(api_key=api_key)
+
+# Using the fast, congestion-free model we just tested
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 TRIAGE_SCHEMA = types.Schema(
     type="OBJECT",
@@ -52,6 +61,7 @@ TRIAGE_SCHEMA = types.Schema(
     required=["transcript", "player", "symptom", "risk", "protocol", "confidence_note"],
 )
 
+# (Keep your PROMPT variable here exactly as it was)
 PROMPT = (
     "You are a sports-science triage assistant used courtside by youth/amateur coaches, "
     "players, parents, and teammates who have NO medical training and only a few seconds to act. "
@@ -74,7 +84,7 @@ PROMPT = (
 
 
 def _process_audio_sync(audio_bytes: bytes, mime_type: str) -> dict:
-    """Sends audio directly as inline data, bypassing the File API processing delays."""
+    """Sends audio directly as inline data using the modern SDK."""
     try:
         audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
 
@@ -84,7 +94,6 @@ def _process_audio_sync(audio_bytes: bytes, mime_type: str) -> dict:
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=TRIAGE_SCHEMA,
-                thinking_config=types.ThinkingConfig(thinking_level="minimal"),
             ),
         )
 
@@ -92,7 +101,6 @@ def _process_audio_sync(audio_bytes: bytes, mime_type: str) -> dict:
 
     except Exception as e:
         raise RuntimeError(f"Gemini API error: {str(e)}")
-
 
 @app.get("/ping")
 async def ping():
