@@ -18,13 +18,8 @@ app.add_middleware(
 # The new SDK automatically picks up the GEMINI_API_KEY environment variable!
 client = genai.Client()
 
-# Use "gemini-3.5-flash-lite" here instead if you want to trade a little
-# accuracy for even faster/cheaper responses.
 MODEL_NAME = "gemini-3.5-flash"
 
-# A strict output schema. This lets Gemini skip "how should I format this"
-# reasoning entirely and also removes the need to strip ```json fences on
-# the frontend, which is itself a small speed + reliability win.
 TRIAGE_SCHEMA = types.Schema(
     type="OBJECT",
     properties={
@@ -58,9 +53,9 @@ TRIAGE_SCHEMA = types.Schema(
 )
 
 PROMPT = (
-    "You are a sports-science triage assistant used courtside by youth/amateur coaches "
-    "who have NO medical training and only a few seconds to act. The audio you receive "
-    "will often be short, urgent, and fragmented (e.g. 'Number 7, twisted her ankle bad' "
+    "You are a sports-science triage assistant used courtside by youth/amateur coaches, "
+    "players, parents, and teammates who have NO medical training and only a few seconds to act. "
+    "The audio you receive will often be short, urgent, and fragmented (e.g. 'Number 7, twisted her ankle bad' "
     "or just 'knee, he's screaming') rather than a full detailed report — that is expected "
     "and NOT a failure case. Do the best triage you can with whatever is said:\n"
     "1. Transcribe whatever was actually said, even if it's just a few words.\n"
@@ -68,7 +63,7 @@ PROMPT = (
     "If something isn't mentioned, use 'Unknown' rather than asking for more detail.\n"
     "3. Give your best-judgment injury risk: Low, Moderate, or High. When information is "
     "sparse, err toward the safer (higher) risk category rather than assuming the best case.\n"
-    "4. Give a short, immediate, step-by-step triage protocol a non-medical coach can follow "
+    "4. Give a short, immediate, step-by-step triage protocol a non-medical person can follow "
     "right now on the sideline (e.g. do/don't move the player, ice, when to call emergency "
     "services). Keep it actionable, not a lecture.\n"
     "5. In 'confidence_note', briefly flag anything you had to assume because the report "
@@ -89,8 +84,6 @@ def _process_audio_sync(audio_bytes: bytes, mime_type: str) -> dict:
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=TRIAGE_SCHEMA,
-                # "minimal" thinking = fastest possible response for this kind of
-                # short extraction/classification task (Gemini 3.x models).
                 thinking_config=types.ThinkingConfig(thinking_level="minimal"),
             ),
         )
@@ -99,6 +92,11 @@ def _process_audio_sync(audio_bytes: bytes, mime_type: str) -> dict:
 
     except Exception as e:
         raise RuntimeError(f"Gemini API error: {str(e)}")
+
+
+@app.get("/ping")
+async def ping():
+    return {"status": "awake"}
 
 
 @app.post("/webhook/voice")
@@ -111,9 +109,6 @@ async def voice_webhook(file: UploadFile = File(...)):
 
         mime_type = file.content_type or "audio/webm"
 
-        # Process the audio in a separate thread. We pass the bytes straight
-        # through instead of writing/reading a temp file first — that disk
-        # round-trip was pure overhead since the SDK just wants raw bytes.
         result = await anyio.to_thread.run_sync(_process_audio_sync, audio_bytes, mime_type)
         return {"status": "success", "data": result}
 
@@ -122,9 +117,6 @@ async def voice_webhook(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/ping")
-async def ping():
-    return {"status": "awake"}
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
@@ -154,6 +146,7 @@ async def serve_frontend():
                 padding: 24px 16px 60px;
                 background: var(--bg);
                 color: #1e293b;
+                font-size: 17px;
             }
             .container {
                 background: white;
@@ -161,29 +154,31 @@ async def serve_frontend():
                 border-radius: 16px;
                 box-shadow: 0 8px 30px rgba(0,0,0,0.08);
             }
-            h1 { color: var(--navy); margin-bottom: 4px; font-size: 1.6rem; }
-            .subtitle { color: #64748b; margin-top: 0; margin-bottom: 20px; font-size: 0.95rem; }
+            h1 { color: var(--navy); margin-bottom: 4px; font-size: 1.7rem; }
+            .subtitle { color: #64748b; margin-top: 0; margin-bottom: 20px; font-size: 1rem; }
 
             .recorder {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 14px;
-                padding: 28px 16px;
+                gap: 16px;
+                padding: 32px 16px;
                 background: linear-gradient(180deg, #fafbfc, #f1f5f9);
                 border: 1px solid #e2e8f0;
                 border-radius: 14px;
             }
+
+            /* BIGGER button — easier to tap under pressure */
             .mic-btn {
-                width: 92px;
-                height: 92px;
+                width: 120px;
+                height: 120px;
                 border-radius: 50%;
                 border: none;
                 background: var(--red);
                 color: white;
-                font-size: 34px;
+                font-size: 42px;
                 cursor: pointer;
-                box-shadow: 0 4px 14px rgba(230,57,70,0.4);
+                box-shadow: 0 6px 20px rgba(230,57,70,0.45);
                 transition: transform 0.15s ease, background 0.2s ease;
             }
             .mic-btn:hover { background: var(--red-dark); transform: scale(1.04); }
@@ -193,24 +188,25 @@ async def serve_frontend():
             }
             @keyframes pulse {
                 0%   { box-shadow: 0 0 0 0 rgba(230,57,70,0.55); }
-                70%  { box-shadow: 0 0 0 22px rgba(230,57,70,0); }
+                70%  { box-shadow: 0 0 0 28px rgba(230,57,70,0); }
                 100% { box-shadow: 0 0 0 0 rgba(230,57,70,0); }
             }
-            .hint { font-size: 0.85rem; color: #64748b; text-align: center; max-width: 380px; }
+            .hint { font-size: 0.95rem; color: #64748b; text-align: center; max-width: 380px; line-height: 1.5; }
             #timer {
                 font-variant-numeric: tabular-nums;
-                font-size: 1.3rem;
+                font-size: 1.5rem;
                 font-weight: 700;
                 color: var(--red-dark);
-                min-height: 1.6rem;
+                min-height: 1.8rem;
             }
 
             #status {
                 margin-top: 16px;
                 font-weight: 600;
+                font-size: 1rem;
                 color: var(--slate);
                 text-align: center;
-                min-height: 1.2rem;
+                min-height: 1.4rem;
             }
 
             .spinner {
@@ -226,37 +222,49 @@ async def serve_frontend():
             @keyframes spin { to { transform: rotate(360deg); } }
 
             #resultCard { margin-top: 24px; display: none; }
-            .risk-badge {
-                display: inline-block;
-                padding: 4px 14px;
-                border-radius: 999px;
-                color: white;
-                font-weight: 700;
-                font-size: 0.85rem;
-                letter-spacing: 0.03em;
+
+            /* LARGE colored risk result — readable at a glance */
+            .risk-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 18px 20px;
+                border-radius: 12px;
+                margin-bottom: 16px;
+                font-size: 1.6rem;
+                font-weight: 900;
+                letter-spacing: 0.02em;
             }
-            .risk-Low { background: var(--low); }
-            .risk-Moderate { background: var(--moderate); }
-            .risk-High { background: var(--high); }
+            .risk-banner.risk-Low    { background: #d4f4ef; color: #1a6b61; border: 2px solid #2a9d8f; }
+            .risk-banner.risk-Moderate { background: #fef3cd; color: #7c5a00; border: 2px solid #e9a13b; }
+            .risk-banner.risk-High   { background: #fde8ea; color: #9f1239; border: 2px solid #e63946; }
+            .risk-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; }
 
             .field {
                 margin-top: 14px;
-                padding: 12px 14px;
+                padding: 14px 16px;
                 background: #f8fafc;
-                border-left: 4px solid var(--slate);
+                border-left: 5px solid var(--slate);
                 border-radius: 6px;
+                font-size: 1rem;
             }
-            .field.protocol { border-left-color: var(--navy); }
+            .field.protocol {
+                border-left-color: var(--navy);
+                background: #eef4ff;
+                border-left-width: 6px;
+            }
+            .field.protocol .field-label { color: var(--navy); }
+            .field.protocol .field-value { font-size: 1.05rem; font-weight: 600; color: #1e293b; }
             .field.note { border-left-color: #cbd5e1; font-style: italic; color: #64748b; }
             .field-label {
-                font-size: 0.72rem;
+                font-size: 0.75rem;
                 text-transform: uppercase;
                 letter-spacing: 0.06em;
                 color: #94a3b8;
                 font-weight: 700;
-                margin-bottom: 4px;
+                margin-bottom: 6px;
             }
-            .field-value { font-size: 0.98rem; line-height: 1.45; white-space: pre-wrap; }
+            .field-value { font-size: 1rem; line-height: 1.5; white-space: pre-wrap; }
 
             #errorBox {
                 display: none;
@@ -266,7 +274,7 @@ async def serve_frontend():
                 border: 1px solid #fecdd3;
                 border-radius: 8px;
                 color: #9f1239;
-                font-size: 0.9rem;
+                font-size: 0.95rem;
                 white-space: pre-wrap;
             }
 
@@ -275,96 +283,114 @@ async def serve_frontend():
                 background: var(--navy);
                 color: white;
                 border: none;
-                padding: 10px 18px;
+                padding: 12px 20px;
                 border-radius: 8px;
                 cursor: pointer;
-                font-size: 0.9rem;
+                font-size: 1rem;
+                width: 100%;
             }
             .retry-btn:hover { opacity: 0.9; }
 
+            /* Warning box — red border, high contrast */
             .disclaimer {
                 display: flex;
                 gap: 10px;
                 align-items: flex-start;
-                background: #fff8e6;
-                border: 1px solid #fde68a;
-                color: #7c5a00;
+                background: #fff1f2;
+                border: 2px solid #e63946;
+                color: #7f1d1d;
                 border-radius: 10px;
-                padding: 10px 14px;
-                font-size: 0.82rem;
-                line-height: 1.4;
+                padding: 12px 14px;
+                font-size: 0.95rem;
+                line-height: 1.5;
                 margin-bottom: 20px;
             }
-            .disclaimer b { color: #5c4300; }
+            .disclaimer b { color: #9f1239; }
 
+            /* Emergency CTA — two buttons side by side */
             .emergency-cta {
                 display: none;
-                align-items: center;
-                justify-content: space-between;
+                flex-direction: column;
                 gap: 10px;
                 margin-top: 16px;
-                padding: 12px 16px;
+                padding: 14px 16px;
                 background: var(--high);
                 color: white;
                 border-radius: 10px;
                 font-weight: 700;
-                font-size: 0.9rem;
+                font-size: 1rem;
+            }
+            .emergency-cta .emergency-title {
+                font-size: 1.05rem;
+            }
+            .emergency-btns {
+                display: flex;
+                gap: 10px;
             }
             .emergency-cta a {
+                flex: 1;
+                text-align: center;
                 color: white;
-                background: rgba(0,0,0,0.2);
-                padding: 6px 12px;
-                border-radius: 6px;
+                background: rgba(0,0,0,0.22);
+                padding: 10px 12px;
+                border-radius: 8px;
                 text-decoration: none;
-                white-space: nowrap;
+                font-size: 1rem;
+                font-weight: 700;
             }
 
             .footer-note {
                 margin-top: 22px;
                 text-align: center;
-                font-size: 0.75rem;
+                font-size: 0.8rem;
                 color: #94a3b8;
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🎙️ Sideline Triage Assistant</h1>
-            <p class="subtitle">Instant AI guidance to help you decide what to do next — in seconds.</p>
+            <h1>🏃 Sports Injury Helper</h1>
+            <p class="subtitle">Speak what happened to get instant first-aid guidance.</p>
 
             <div class="disclaimer">
                 <span>⚠️</span>
-                <div><b>This is decision support, not medical treatment.</b> It tells you what to
-                do next — it doesn't replace a doctor, paramedic, or emergency services. For
-                any life-threatening injury, call emergency services immediately.</div>
+                <div><b>This provides immediate guidance on what to do next - it is NOT a doctor.</b> For any emergency, call <b>108 (Ambulance)</b> or <b>112 (All Emergencies)</b> immediately.</div>
             </div>
 
             <div class="recorder">
                 <button id="micBtn" class="mic-btn" onclick="toggleRecording()">🔴</button>
                 <div id="timer"></div>
-                <div class="hint">Tap, say what happened in a few words, tap again — e.g. "Number 7, twisted her ankle bad." No full report needed.</div>
+                <div class="hint">🔴 Tap the button. Say what happened in a few words (e.g. "Number 7 fell and hurt his knee"). Tap again.<br></div>
             </div>
 
             <div id="status"></div>
             <div id="errorBox"></div>
 
             <div id="resultCard">
-                <div style="display:flex; align-items:center; justify-content:space-between;">
-                    <span class="field-label" style="margin:0;">AI GUIDANCE — NOT A DIAGNOSIS</span>
-                    <span id="riskBadge" class="risk-badge"></span>
+
+                <!-- Big colored risk banner -->
+                <div id="riskBanner" class="risk-banner">
+                    <div>
+                        <div class="risk-label">Injury Risk</div>
+                        <div id="riskText"></div>
+                    </div>
+                    <span id="riskEmoji" style="font-size:2rem;"></span>
                 </div>
 
                 <div id="emergencyCta" class="emergency-cta">
-                    <span>🚨 High risk — consider calling emergency services now</span>
-                    <a href="tel:112">Call 112</a>
+                    <div class="emergency-title">🚨 High risk — call for help immediately</div>
+                    <div class="emergency-btns">
+                        <a href="tel:108">📞 Call 108 (Ambulance)</a>
+                        <a href="tel:112">📞 Call 112 (Emergency)</a>
+                    </div>
                 </div>
 
                 <div class="field">
-                    <div class="field-label">Player</div>
+                    <div class="field-label">Player / Person</div>
                     <div class="field-value" id="fPlayer"></div>
                 </div>
                 <div class="field">
-                    <div class="field-label">Symptom</div>
+                    <div class="field-label">Injury / Symptom</div>
                     <div class="field-value" id="fSymptom"></div>
                 </div>
                 <div class="field protocol">
@@ -380,10 +406,10 @@ async def serve_frontend():
                     <div class="field-value" id="fNote"></div>
                 </div>
 
-                <button class="retry-btn" onclick="resetUI()">Record another report</button>
+                <button class="retry-btn" onclick="resetUI()">🔴 Record another report</button>
             </div>
 
-            <div class="footer-note">Sideline Triage Assistant gives first-response guidance only. Always follow up with a qualified medical professional.</div>
+            <div class="footer-note">This tool provides immediate first-aid guidance only. Always follow up with a doctor.</div>
         </div>
 
         <script>
@@ -484,10 +510,14 @@ async def serve_frontend():
                 document.getElementById('fProtocol').textContent = a.protocol || '';
                 document.getElementById('fTranscript').textContent = a.transcript || '';
 
-                const badge = document.getElementById('riskBadge');
                 const risk = a.risk || 'Moderate';
-                badge.textContent = risk + ' Risk';
-                badge.className = 'risk-badge risk-' + risk;
+
+                // Big colored risk banner
+                const banner = document.getElementById('riskBanner');
+                banner.className = 'risk-banner risk-' + risk;
+                document.getElementById('riskText').textContent = risk + ' Risk';
+                document.getElementById('riskEmoji').textContent =
+                    risk === 'High' ? '🔴' : risk === 'Moderate' ? '🟠' : '🟢';
 
                 const noteWrap = document.getElementById('fNoteWrap');
                 if (a.confidence_note && a.confidence_note.toLowerCase() !== 'none') {
