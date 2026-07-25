@@ -358,7 +358,7 @@ async def serve_frontend():
     <body>
         <div class="container">
             <h1>🏃 Sports Injury Helper</h1>
-            <p class="subtitle">Speak what happened to get instant first-aid guidance.</p>
+            <p class="subtitle">Speak what happened. Get instant AI guidance on what to do next.</p>
 
             <div class="disclaimer">
                 <span>⚠️</span>
