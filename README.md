@@ -2,7 +2,7 @@
 
 **A voice-based AI injury triage tool for anyone on the sideline — coaches, players, parents, or teammates.**
 
-🔴 **Live Demo:** [sideline-triage-assistant-n.onrender.com](https://sideline-triage-assistant-here.onrender.com/)
+🔴 **Live Demo:** [sideline-triage-assistant-here.onrender.com](https://sideline-triage-assistant-here.onrender.com/)
 
 ---
 
